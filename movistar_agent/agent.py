@@ -35,7 +35,7 @@ sales_specialist = Agent(
         api_key=LITELLM_API_KEY,
         metadata={
             "tags": ["ADK"],
-            "langfuse_trace_name": "Movistar Sales Specialist Phase",
+            "trace_name": "Movistar Sales Specialist Phase",
             "session_id": CALL_SESSION_ID,
             "user_id": SYSTEM_STATE["CELULAR_CONTACTO"],
         },
@@ -66,7 +66,7 @@ greeting_agent = Agent(
         api_key=LITELLM_API_KEY,
         metadata={
             "tags": ["ADK"],
-            "langfuse_trace_name": "Movistar Greeting Phase",
+            "trace_name": "Movistar Greeting Phase",
             "session_id": CALL_SESSION_ID,
             "user_id": SYSTEM_STATE["CELULAR_CONTACTO"],
         },
