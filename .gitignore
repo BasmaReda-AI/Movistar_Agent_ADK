@@ -20,6 +20,12 @@ movistar_agent/.adk/
 .vscode/
 .idea/
 
+# Runtime logs
+*.log
+
+# Docs (not part of the source repo)
+docs/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -1,19 +1,20 @@
-# Movistar Colombia — Prepaid-to-Postpaid Migration Agent (Google ADK)
+# Movistar Outbound Sales — ElevenLabs Voice + Google ADK
 
-Two-agent outbound sales system covering the full happy path (Scenarios A-01 → A-05),
-built with **Google ADK** and routed through a **LiteLLM proxy**.
+Voice-powered outbound sales agent for Movistar Mexico. Uses **ElevenLabs Conversational AI** for real-time speech and **Google ADK** for multi-agent orchestration (greeting → sales pitch with full 22-category objection matrix).
 
 ```
-Customer picks up
-  → greeting_agent  : identity confirmation + availability check
-  → transfer_to_agent (ADK built-in) ──▶ sales_specialist
-  → sales_specialist: engagement hook                          [Phase 0]
-      ↳ Objection Matrix rebuttal (if objection raised)       [A-04]
-  → primary offer pitch                                        [Phase 1]
-      ↳ Objection Matrix rebuttal (if pitch-phase objection)  [A-05]
-      ↳ value build rebuttal (price hesitation)               [Phase 5A]
-      ↳ downsell pitch (primary rejected)                     [Phase 5B]
-  → explicit acceptance → warm handoff → transfer_to_human_agent → end_call (CRM)
+Customer speaks
+  → ElevenLabs ASR → WebSocket → speech_engine_server
+  → agent_adapter (ADK Runner) → root_agent (greeting)
+     → identity confirmation + availability check
+     → transfer_to_agent (ADK built-in) ──▶ sales_specialist
+        → engagement hook
+           ↳ Objection Matrix rebuttal (if objection raised)
+        → primary offer pitch
+           ↳ Objection Matrix rebuttal (if pitch-phase objection)
+           ↳ value build rebuttal (price hesitation)
+           ↳ downsell pitch (primary rejected)
+        → explicit acceptance → warm handoff → transfer_to_human_agent → end_call
 ```
 
 ## Scenarios covered
@@ -26,75 +27,102 @@ Customer picks up
 | A-04 | Offer accepted after hook-phase objection (Phase 0) |
 | A-05 | Downsell accepted after pitch-phase objection (Phase 1) |
 
-Off-path replies (wrong number, busy, any final decline) each get one polite
-closing line + `end_call` so the session never gets stuck.
+Off-path replies (wrong number, busy, any final decline) each get one polite closing line + `end_call` so the session never gets stuck.
 
 ## Structure
 
 ```
-movistar/
-├── .env                    # LiteLLM credentials (not committed)
-├── requirements.txt
-├── run.bat / run.ps1
-└── movistar_agent/
-    ├── __init__.py             # exports root_agent
-    ├── agent.py                # greeting_agent (root) + sales_specialist (sub-agent)
-    ├── config.py               # SYSTEM_STATE: customer CRM data, offer keys, model
-    ├── prompts.py              # GREETING_INSTRUCTION + SALES_INSTRUCTION (full happy path)
-    ├── tools.py                # query_offers_kb, query_objection_matrix,
-    │                           # trigger_oferta_alterna, transfer_to_human_agent, end_call
-    └── kb/
-        ├── offers_kb.py        # primary (40 GB) and downsell (25 GB) plan data
-        └── objection_matrix.py # 22-category rebuttal matrix with verbatim scripts
+ADK-Migration/
+├── elevenlabs_integration/
+│   ├── .env                       # ElevenLabs + LiteLLM credentials (not committed)
+│   ├── requirements.txt
+│   ├── run_demo.ps1               # One-click launcher (ngrok → engine → FastAPI)
+│   ├── cleanup.ps1                # Stops all processes
+│   ├── agent_adapter.py           # Wraps ADK Runner for voice pipeline
+│   ├── speech_engine_server.py    # ElevenLabs Speech Engine server
+│   ├── api.py                     # FastAPI backend (chat, signed-url, voice context)
+│   ├── test_adapter.py            # AgentAdapter unit test
+│   └── static/
+│       ├── index.html             # Main page (loads ElevenLabs SDK + UI)
+│       ├── app.js                 # Voice chat UI with ElevenLabs SDK
+│       ├── elevenlabs-error-shim.js  # Crash guard for malformed SDK error frames
+│       └── style.css
+├── movistar_agent/
+│   ├── __init__.py                # exports root_agent
+│   ├── agent.py                   # greeting_agent (root) + sales_specialist sub-agent
+│   ├── config.py                  # SYSTEM_STATE: customer CRM data, offer keys, model
+│   ├── prompts.py                 # GREETING_INSTRUCTION + SALES_INSTRUCTION (full happy path)
+│   ├── tools.py                   # query_offers_kb, query_objection_matrix,
+│   │                              # trigger_oferta_alterna, transfer_to_human_agent, end_call
+│   └── kb/
+│       ├── offers_kb.py           # primary (40 GB) and downsell (25 GB) plan data
+│       └── objection_matrix.py    # 22-category rebuttal matrix with verbatim scripts
+└── docs/
+    ├── elevenlabs-adk-integration-design.md
+    ├── elevenlabs-adk-implementation-plan.md
+    ├── MILESTONES.md
+    ├── TASK-LIST.md
+    ├── TEST-REPORT.md
+    ├── TEST-REPORT-VOICE.md
+    └── voice-disconnect-investigation.md
 ```
 
 ## Setup
 
 ### 1. Environment
 
-Create a `.env` file in the project root:
+Create a `.env` file in `elevenlabs_integration/`:
 
 ```env
-LITELLM_API_BASE=https://<your-litellm-proxy>/v1
-LITELLM_API_KEY=sk-...
-MODEL=openai/gemini-2.5-flash   # any model available on your proxy
-MIGRATION_ADK=movistar-adk      # Langfuse trace tag (optional)
+ELEVENLABS_API_KEY=sk-your-elevenlabs-key
+LITELLM_API_KEY=sk-your-litellm-key
+LITELLM_API_BASE=https://your-litellm-proxy/v1
+MODEL=gemini/gemini-2.5-flash
 ```
 
-### 2. Install & run
+### 2. Install
 
-```bash
-pip install -r requirements.txt
-
-# Windows
-run.bat
-
-# or manually
-adk web
+```powershell
+pip install -r elevenlabs_integration\requirements.txt
 ```
 
-Open **http://127.0.0.1:8000**, select **movistar_agent**, and send any message
-(it simulates the customer picking up the phone).
+### 3. Run
 
-## Demo script
+> **Note:** Use `run_demo.ps1` inside `elevenlabs_integration/`. The old `run.bat` and `run.ps1` at the project root are from the original ADK-only setup and are obsolete — they launch the text-based `adk web` interface instead of the voice pipeline.
 
-| You type | Agent does |
+```powershell
+.\elevenlabs_integration\run_demo.ps1
+```
+
+This starts:
+1. **ngrok** — public tunnel to the local server
+2. **Speech Engine** — ElevenLabs Conversational AI agent pointing to the ngrok URL
+3. **FastAPI** server at `http://localhost:8501`
+
+Your browser opens automatically. Click **Voz** to start a voice session.
+
+### 4. Cleanup
+
+```powershell
+.\elevenlabs_integration\cleanup.ps1
+```
+
+## Demo script — voice
+
+| You say | Agent should |
 |---|---|
-| `hello` | Greeting agent asks for identity: *"Good morning, am I speaking with [Name]?"* |
-| `yes, speaking` | Asks for availability |
-| `sure, go ahead` | Transfers to `sales_specialist` → engagement hook |
-| `yes, tell me` | Queries Offers KB → full pitch |
-| `sounds good, let's do it` | Warm handoff → `transfer_to_human_agent` → `end_call` + CRM logs |
+| *hello* | Greeting agent asks: *"Good morning, am I speaking with \[Name\]?"* |
+| *yes, speaking* | Asks for availability |
+| *sure, go ahead* | Transfers to `sales_specialist` → engagement hook |
+| *yes, tell me* | Queries Offers KB → full pitch |
+| *sounds good, let's do it* | Warm handoff → `transfer_to_human_agent` → `end_call` |
 
 **Objection during hook (A-04 path):**
 
-| You type | Agent does |
+| You say | Agent should |
 |---|---|
-| `I had a bad experience with Movistar` | Calls `query_objection_matrix(BAD_PAST_EXPERIENCE)` → rebuttal |
-| `ok, tell me more` | Proceeds to pitch → acceptance → handoff |
-
-Watch the terminal for `[SYSTEM]` logs — KB query, objection matrix lookup,
-human transfer, and the two simulated CRM API POSTs.
+| *I had a bad experience with Movistar* | Calls `query_objection_matrix(BAD_PAST_EXPERIENCE)` → rebuttal |
+| *ok, tell me more* | Proceeds to pitch → acceptance → handoff |
 
 ## Objection Matrix
 
@@ -125,5 +153,23 @@ human transfer, and the two simulated CRM API POSTs.
 | `RECHARGE_18500` | $18,500 prepaid package |
 | `FEAR_OF_BILL_INCREASES` | hidden charges, price hikes |
 
-Each category has 1–4 arguments. `query_objection_matrix(key, argument=N)` returns
-the verbatim rebuttal with the customer name already substituted.
+Each category has 1–4 arguments. `query_objection_matrix(key, argument=N)` returns the verbatim rebuttal with the customer name already substituted.
+
+## Architecture
+
+```
+┌─────────────┐     ElevenLabs SDK      ┌──────────────────────┐
+│  Browser    │ ◄──── WebRTC ─────────► │ ElevenLabs Convers.  │
+│  (voice UI) │                         │  AI (Speech Engine)  │
+└─────────────┘                         └──────────┬───────────┘
+                                                    │ WebSocket
+                                                    ▼
+┌───────────────────────────────────────────────────────────────┐
+│  speech_engine_server.py   (port 3001, ngrok-tunneled)        │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │  agent_adapter.py  →  ADK Runner  →  movistar_agent/   │  │
+│  │                       (multi-agent)   (root + sub-agent)│  │
+│  └─────────────────────────────────────────────────────────┘  │
+│  ▲ FastAPI  (port 8501) — chat history, signed URLs           │
+└───────────────────────────────────────────────────────────────┘
+```
