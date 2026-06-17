@@ -10,6 +10,7 @@ Everything else (blind leads, reschedules) lives in the full version.
 """
 
 import os
+import uuid
 from datetime import datetime
 
 SYSTEM_STATE = {
@@ -22,6 +23,8 @@ SYSTEM_STATE = {
     "VLR_OFERTA2": "$35.900",
     "Capacidad_Alterna": "25GB",
 }
+
+CALL_SESSION_ID = str(uuid.uuid4())
 
 MODEL = os.getenv("MODEL", "openai/gemini-2.5-flash")
 LITELLM_API_BASE = os.getenv(
