@@ -48,23 +48,16 @@ ADK-Migration/
 │       ├── elevenlabs-error-shim.js  # Crash guard for malformed SDK error frames
 │       └── style.css
 ├── movistar_agent/
-│   ├── __init__.py                # exports root_agent
-│   ├── agent.py                   # greeting_agent (root) + sales_specialist sub-agent
-│   ├── config.py                  # SYSTEM_STATE: customer CRM data, offer keys, model
-│   ├── prompts.py                 # GREETING_INSTRUCTION + SALES_INSTRUCTION (full happy path)
-│   ├── tools.py                   # query_offers_kb, query_objection_matrix,
-│   │                              # trigger_oferta_alterna, transfer_to_human_agent, end_call
-│   └── kb/
-│       ├── offers_kb.py           # primary (40 GB) and downsell (25 GB) plan data
-│       └── objection_matrix.py    # 22-category rebuttal matrix with verbatim scripts
-└── docs/
-    ├── elevenlabs-adk-integration-design.md
-    ├── elevenlabs-adk-implementation-plan.md
-    ├── MILESTONES.md
-    ├── TASK-LIST.md
-    ├── TEST-REPORT.md
-    ├── TEST-REPORT-VOICE.md
-    └── voice-disconnect-investigation.md
+   ├── __init__.py                # exports root_agent
+   ├── agent.py                   # greeting_agent (root) + sales_specialist sub-agent
+   ├── config.py                  # SYSTEM_STATE: customer CRM data, offer keys, model
+   ├── prompts.py                 # GREETING_INSTRUCTION + SALES_INSTRUCTION (full happy path)
+   ├── tools.py                   # query_offers_kb, query_objection_matrix,
+   │                              # trigger_oferta_alterna, transfer_to_human_agent, end_call
+   └── kb/
+       ├── offers_kb.py           # primary (40 GB) and downsell (25 GB) plan data
+       └── objection_matrix.py    # 22-category rebuttal matrix with verbatim scripts
+
 ```
 
 ## Setup
