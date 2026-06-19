@@ -14,7 +14,7 @@ from google.adk.agents import Agent
 from google.adk.models.lite_llm import LiteLlm
 from dotenv import load_dotenv
 
-from .config import MODEL, LITELLM_API_BASE, LITELLM_API_KEY, CALL_SESSION_ID, SYSTEM_STATE
+from .config import MODEL, LITELLM_API_BASE, LITELLM_API_KEY, CALL_SESSION_ID
 from .prompts import GREETING_INSTRUCTION, SALES_INSTRUCTION
 from .tools import (
     query_offers_kb,
@@ -34,12 +34,8 @@ sales_specialist = Agent(
         api_base=LITELLM_API_BASE,
         api_key=LITELLM_API_KEY,
         extra_headers={
-            "x-litellm-tags": "ADK",
+            "x-litellm-tags": "langfuse_migration_adk",
             "x-litellm-session-id": CALL_SESSION_ID,
-        },
-        metadata={
-            "trace_name": "Movistar Sales Specialist Phase",
-            "user_id": SYSTEM_STATE["CELULAR_CONTACTO"],
         },
     ),
     description=(
@@ -67,12 +63,8 @@ greeting_agent = Agent(
         api_base=LITELLM_API_BASE,
         api_key=LITELLM_API_KEY,
         extra_headers={
-            "x-litellm-tags": "ADK",
+            "x-litellm-tags": "langfuse_migration_adk",
             "x-litellm-session-id": CALL_SESSION_ID,
-        },
-        metadata={
-            "trace_name": "Movistar Greeting Phase",
-            "user_id": SYSTEM_STATE["CELULAR_CONTACTO"],
         },
     ),
     description=(
