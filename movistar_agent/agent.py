@@ -33,10 +33,12 @@ sales_specialist = Agent(
         model=MODEL,
         api_base=LITELLM_API_BASE,
         api_key=LITELLM_API_KEY,
+        extra_headers={
+            "x-litellm-tags": "ADK",
+            "x-litellm-session-id": CALL_SESSION_ID,
+        },
         metadata={
-            "tags": ["ADK"],
             "trace_name": "Movistar Sales Specialist Phase",
-            "session_id": CALL_SESSION_ID,
             "user_id": SYSTEM_STATE["CELULAR_CONTACTO"],
         },
     ),
@@ -64,10 +66,12 @@ greeting_agent = Agent(
         model=MODEL,
         api_base=LITELLM_API_BASE,
         api_key=LITELLM_API_KEY,
+        extra_headers={
+            "x-litellm-tags": "ADK",
+            "x-litellm-session-id": CALL_SESSION_ID,
+        },
         metadata={
-            "tags": ["ADK"],
             "trace_name": "Movistar Greeting Phase",
-            "session_id": CALL_SESSION_ID,
             "user_id": SYSTEM_STATE["CELULAR_CONTACTO"],
         },
     ),
