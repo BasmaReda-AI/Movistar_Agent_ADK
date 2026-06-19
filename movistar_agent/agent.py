@@ -34,7 +34,7 @@ sales_specialist = Agent(
         api_base=LITELLM_API_BASE,
         api_key=LITELLM_API_KEY,
         extra_headers={
-            "x-litellm-tags": "langfuse_migration_adk",
+            "langfuse_migration_adk": "langfuse_migration_adk",
             "x-litellm-session-id": CALL_SESSION_ID,
         },
     ),
@@ -63,7 +63,7 @@ greeting_agent = Agent(
         api_base=LITELLM_API_BASE,
         api_key=LITELLM_API_KEY,
         extra_headers={
-            "x-litellm-tags": "langfuse_migration_adk",
+            "langfuse_migration_adk": "langfuse_migration_adk",
             "x-litellm-session-id": CALL_SESSION_ID,
         },
     ),
