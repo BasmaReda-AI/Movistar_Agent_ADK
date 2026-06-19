@@ -36,6 +36,7 @@ sales_specialist = Agent(
         headers={
             "x-litellm-tags": "langfuse_migration_adk",
             "langfuse_session_id": CALL_SESSION_ID,
+            "langfuse_trace_name": "Movistar Sales Specialist Phase",
         },
     ),
     description=(
@@ -65,6 +66,7 @@ greeting_agent = Agent(
         headers={
             "x-litellm-tags": "langfuse_migration_adk",
             "langfuse_session_id": CALL_SESSION_ID,
+            "langfuse_trace_name": "Movistar Greeting Phase",
         },
     ),
     description=(
