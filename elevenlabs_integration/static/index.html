@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,18 +18,18 @@
       <div class="header-left">
         <span class="status-dot"></span>
         <div>
-          <div class="header-title">Movistar · Asistente Comercial</div>
+          <div class="header-title">Movistar · Sales Assistant</div>
           <div class="header-subtitle">ElevenLabs + ADK</div>
         </div>
       </div>
-      <div class="header-tagline">chat por texto o voz · tú eliges</div>
+      <div class="header-tagline">chat by text or voice · you choose</div>
     </div>
 
     <!-- Messages Area -->
     <div class="messages-container" id="messagesContainer">
       <div class="empty-state">
         <div class="empty-state-icon">📞</div>
-        <div class="empty-state-text">Inicia una conversación escribiendo abajo o presiona el botón de voz para hablar con Natalie.</div>
+        <div class="empty-state-text">Start a conversation by typing below or press the voice button to talk to Natalie.</div>
       </div>
     </div>
 
@@ -38,8 +38,8 @@
 
       <!-- Text mode -->
       <div class="input-wrapper" id="inputWrapper">
-        <textarea id="messageInput" placeholder="Escribe un mensaje..." rows="1"></textarea>
-        <button class="button-send" id="sendButton" title="Enviar mensaje">
+        <textarea id="messageInput" placeholder="Type a message..." rows="1"></textarea>
+        <button class="button-send" id="sendButton" title="Send message">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
         </button>
       </div>
@@ -52,13 +52,13 @@
           <div class="orb-inner"></div>
         </div>
         <div class="voice-bar-info">
-          <div class="voice-bar-status" id="voiceStatus">Conectando...</div>
-          <div class="voice-bar-transcript" id="voiceTranscript">Di algo…</div>
+          <div class="voice-bar-status" id="voiceStatus">Connecting...</div>
+          <div class="voice-bar-transcript" id="voiceTranscript">Say something…</div>
         </div>
       </div>
 
       <!-- Voice toggle button (becomes End when active) -->
-      <button class="button-voice" id="voiceButton" title="Iniciar llamada de voz">
+      <button class="button-voice" id="voiceButton" title="Start voice call">
         <svg class="icon-mic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="2" width="6" height="12" rx="3"/>
           <path d="M5 10a7 7 0 0 0 14 0"/>
@@ -68,7 +68,7 @@
         <svg class="icon-stop" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:none">
           <rect x="4" y="4" width="16" height="16" rx="2"/>
         </svg>
-        <span class="voice-btn-label">Voz</span>
+        <span class="voice-btn-label">Voice</span>
       </button>
 
     </div>

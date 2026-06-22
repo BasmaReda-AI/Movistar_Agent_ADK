@@ -55,8 +55,8 @@ function setTextMode() {
   voiceButton.classList.remove('active');
   iconMic.style.display  = '';
   iconStop.style.display = 'none';
-  voiceBtnLabel.textContent = 'Voz';
-  voiceButton.title = 'Iniciar llamada de voz';
+  voiceBtnLabel.textContent = 'Voice';
+  voiceButton.title = 'Start voice call';
 }
 
 function setVoiceMode() {
@@ -65,10 +65,10 @@ function setVoiceMode() {
   voiceButton.classList.add('active');
   iconMic.style.display  = 'none';
   iconStop.style.display = '';
-  voiceBtnLabel.textContent = 'Finalizar';
-  voiceButton.title = 'Finalizar modo voz';
+  voiceBtnLabel.textContent = 'End';
+  voiceButton.title = 'End voice mode';
   setOrbState('connecting');
-  voiceStatus.textContent    = 'Conectando...';
+  voiceStatus.textContent    = 'Connecting...';
   voiceTranscript.textContent = '';
 }
 
@@ -112,7 +112,7 @@ async function sendMessage(text) {
   } catch (err) {
     console.error('Chat error:', err);
     state.messages = state.messages.filter(m => m.id !== typingId);
-    state.messages.push({ id: generateMessageId(), role: 'assistant', content: 'Lo siento, algo sali\u00f3 mal. Por favor intenta de nuevo.', isVoice: false, timestamp: new Date() });
+    state.messages.push({ id: generateMessageId(), role: 'assistant', content: 'Sorry, something went wrong. Please try again.', isVoice: false, timestamp: new Date() });
   }
 
   renderMessages();
@@ -155,27 +155,27 @@ async function startVoiceChat() {
     const ElevenLabsClient = window.ElevenLabsClient;
     if (!ElevenLabsClient) throw new Error('ElevenLabs SDK not loaded');
 
-    voiceStatus.textContent = 'Iniciando...';
+    voiceStatus.textContent = 'Starting...';
 
     state.conversation = await ElevenLabsClient.Conversation.startSession({
       conversationToken,
       overrides: {
         agent: {
-          firstMessage: "¡Hola! Soy Natalie, llamando de Movistar. ¿Estoy hablando con Mauricio Ortiz?",
+          firstMessage: "Hello! I'm Natalie, calling from Movistar. Am I speaking with Mauricio Ortiz?",
         },
       },
       onConnect: () => {
         setOrbState('listening');
-        voiceStatus.textContent    = 'Escuchando';
-        voiceTranscript.textContent = 'Habla con naturalidad…';
+        voiceStatus.textContent    = 'Listening';
+        voiceTranscript.textContent = 'Speak naturally…';
       },
       onModeChange: ({ mode }) => {
         if (mode === 'speaking') {
           setOrbState('speaking');
-          voiceStatus.textContent = 'Natalie habla';
+          voiceStatus.textContent = 'Natalie speaking';
         } else {
           setOrbState('listening');
-          voiceStatus.textContent = 'Escuchando';
+          voiceStatus.textContent = 'Listening';
         }
       },
       onMessage: ({ message, source }) => {
@@ -197,9 +197,9 @@ async function startVoiceChat() {
         // Quota/rate-limit is surfaced by the backend as a flat error frame
         // (normalized into onError by elevenlabs-error-shim.js).
         if (/quota|rate.?limit|exceeds/i.test(text)) {
-          voiceStatus.textContent = 'Servicio no disponible (cuota agotada)';
+          voiceStatus.textContent = 'Service unavailable (quota exhausted)';
         } else {
-          voiceStatus.textContent = 'Error — intenta de nuevo';
+          voiceStatus.textContent = 'Error — try again';
         }
         setOrbState('connecting');
       },
@@ -234,7 +234,7 @@ function renderMessages() {
     messagesContainer.innerHTML = `
       <div class="empty-state">
         <div class="empty-state-icon">📞</div>
-        <div class="empty-state-text">Inicia una conversación escribiendo abajo o presiona el botón de voz para hablar con Natalie.</div>
+        <div class="empty-state-text">Start a conversation by typing below or press the voice button to talk to Natalie.</div>
       </div>`;
     return;
   }
@@ -248,7 +248,7 @@ function renderMessages() {
         <div class="message-bubble">${escapeHtml(msg.content)}</div>
         <div class="message-info">
           ${formatTimestamp(msg.timestamp)}
-          ${msg.isVoice ? '<span class="voice-badge">voz</span>' : ''}
+          ${msg.isVoice ? '<span class="voice-badge">voice</span>' : ''}
         </div>
       </div>
     </div>`;
