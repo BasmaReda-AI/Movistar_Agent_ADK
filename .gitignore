@@ -26,6 +26,18 @@ movistar_agent/.adk/
 # Docs (not part of the source repo)
 docs/
 
+# Internal tooling & working artifacts (not part of the source repo)
+.opencode/
+.playwright-mcp/
+logs/
+screenshot.png
+snapshot.md
+
+# Runtime-generated files
+elevenlabs_integration/.engine_id
+elevenlabs_integration/voice_transcript.json
+elevenlabs_integration/voice_context.json
+
 # OS
 .DS_Store
 Thumbs.db

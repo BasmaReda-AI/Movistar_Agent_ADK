@@ -36,7 +36,7 @@ ADK-Migration/
 ├── elevenlabs_integration/
 │   ├── .env                       # ElevenLabs + LiteLLM credentials (not committed)
 │   ├── requirements.txt
-│   ├── run_demo.ps1               # One-click launcher (ngrok → engine → FastAPI)
+│   ├── run_demo.ps1               # One-click launcher (Cloudflare Tunnel → engine → FastAPI)
 │   ├── cleanup.ps1                # Stops all processes
 │   ├── agent_adapter.py           # Wraps ADK Runner for voice pipeline
 │   ├── speech_engine_server.py    # ElevenLabs Speech Engine server
@@ -65,6 +65,8 @@ ADK-Migration/
     ├── TEST-REPORT.md
     ├── TEST-REPORT-VOICE.md
     └── voice-disconnect-investigation.md
+└── logs/
+    └── log-2026-06-23.md          # Change log (Cloudflare Tunnel migration, voice context fix)
 ```
 
 ## Setup
@@ -86,7 +88,17 @@ MODEL=gemini/gemini-2.5-flash
 pip install -r elevenlabs_integration\requirements.txt
 ```
 
-### 3. Run
+### 3. Install tunnel (Cloudflare Tunnel)
+
+ngrok is blocked by most corporate firewalls. This project uses **Cloudflare Tunnel** instead:
+
+```powershell
+winget install cloudflare.cloudflared
+```
+
+Or download the Windows `.msi` from [developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
+
+### 4. Run
 
 > **Note:** Use `run_demo.ps1` inside `elevenlabs_integration/`. The old `run.bat` and `run.ps1` at the project root are from the original ADK-only setup and are obsolete — they launch the text-based `adk web` interface instead of the voice pipeline.
 
@@ -95,13 +107,13 @@ pip install -r elevenlabs_integration\requirements.txt
 ```
 
 This starts:
-1. **ngrok** — public tunnel to the local server
-2. **Speech Engine** — ElevenLabs Conversational AI agent pointing to the ngrok URL
+1. **Cloudflare Tunnel** — public tunnel to the local server (replaces ngrok, which is blocked by corporate firewalls)
+2. **Speech Engine** — ElevenLabs Conversational AI agent pointing to the tunnel URL
 3. **FastAPI** server at `http://localhost:8501`
 
 Your browser opens automatically. Click **Voz** to start a voice session.
 
-### 4. Cleanup
+### 5. Cleanup
 
 ```powershell
 .\elevenlabs_integration\cleanup.ps1
@@ -165,7 +177,7 @@ Each category has 1–4 arguments. `query_objection_matrix(key, argument=N)` ret
                                                     │ WebSocket
                                                     ▼
 ┌───────────────────────────────────────────────────────────────┐
-│  speech_engine_server.py   (port 3001, ngrok-tunneled)        │
+│  speech_engine_server.py   (port 3001, Cloudflare Tunnel)     │
 │  ┌─────────────────────────────────────────────────────────┐  │
 │  │  agent_adapter.py  →  ADK Runner  →  movistar_agent/   │  │
 │  │                       (multi-agent)   (root + sub-agent)│  │

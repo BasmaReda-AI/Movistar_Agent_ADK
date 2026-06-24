@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     One-click launcher for the ElevenLabs + ADK Integration Demo.
-    Starts ngrok, the Speech Engine server, and the FastAPI UI automatically.
+    Starts a Cloudflare Tunnel, the Speech Engine server, and the FastAPI UI automatically.
 
     Usage: .\run_demo.ps1
     Stop:   .\cleanup.ps1
@@ -11,6 +11,34 @@ $ProjectDir = "C:\Users\Peter\Downloads\personal-assistant\expermints\software-d
 $LogDir = "$env:TEMP\elevenlabs-adk-demo"
 $Null = New-Item -ItemType Directory -Path $LogDir -Force
 $PidFile = "$LogDir\demo-pids.txt"
+
+# Locate the correct Python interpreter (must have elevenlabs installed)
+$PythonBin = (Get-Command "python" -ErrorAction SilentlyContinue).Source
+if ($PythonBin) {
+    # Verify it can import elevenlabs
+    $test = & $PythonBin -c "import elevenlabs; print('OK')" 2>&1
+    if ($test -ne "OK") { $PythonBin = $null }
+}
+if (-not $PythonBin) {
+    # Fallback to known good paths
+    $candidates = @(
+        "C:\Users\Peter\AppData\Local\Programs\Python\Python312\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
+        "$env:LOCALAPPDATA\Microsoft\WindowsApps\python.exe"
+    )
+    foreach ($c in $candidates) {
+        if (Test-Path $c) {
+            $test = & $c -c "import elevenlabs; print('OK')" 2>&1
+            if ($test -eq "OK") { $PythonBin = $c; break }
+        }
+    }
+}
+if (-not $PythonBin) {
+    Write-Host "  [FAIL] Could not find Python with elevenlabs installed." -ForegroundColor Red
+    Write-Host "     Install with: pip install -r requirements.txt" -ForegroundColor Red
+    exit 1
+}
+Write-Host "  Using Python: $PythonBin" -ForegroundColor Gray
 
 # -- Helper functions -------------------------------------------------
 
@@ -53,45 +81,61 @@ Write-Host ""
 # 1. Cleanup
 Cleanup-OldProcesses
 
-# 2. Start ngrok
-Write-Status "  Starting ngrok tunnel..." -Color Yellow
-$ngrokProcess = Start-Process -WindowStyle Hidden -FilePath "ngrok" `
-    -ArgumentList "http", "3001" `
-    -PassThru -WorkingDirectory $ProjectDir
-Save-Pid "ngrok" $ngrokProcess.Id
-Start-Sleep -Seconds 4
-
-# 3. Get ngrok URL (retry up to 15 seconds)
-Write-Status "  Getting ngrok public URL..." -Color Yellow
-$ngrokUrl = $null
-for ($i = 0; $i -lt 15; $i++) {
-    try {
-        $tunnels = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -ErrorAction Stop
-        $ngrokUrl = $tunnels.tunnels[0].public_url
-        if ($ngrokUrl) { break }
-    } catch {
-        # ngrok API not ready yet
+# 2. Start cloudflared tunnel
+Write-Status "  Starting cloudflared tunnel..." -Color Yellow
+$cfBin = (Get-Command "cloudflared" -ErrorAction SilentlyContinue).Source
+if (-not $cfBin) {
+    $cfBin = "C:\Program Files (x86)\cloudflared\cloudflared.exe"
+    if (-not (Test-Path $cfBin)) {
+        Write-Status "  [FAIL] cloudflared not found. Install: winget install cloudflare.cloudflared" -Color Red
+        exit 1
     }
+}
+$cfLog = "$LogDir\cloudflared.log"
+$cfOutLog = "$LogDir\cloudflared-out.log"
+$cfProcess = Start-Process -WindowStyle Hidden -FilePath $cfBin `
+    -ArgumentList "tunnel", "--url", "http://localhost:3001" `
+    -PassThru -WorkingDirectory $ProjectDir `
+    -RedirectStandardError $cfLog -RedirectStandardOutput $cfOutLog
+Save-Pid "cloudflared" $cfProcess.Id
+
+# 3. Get tunnel URL (retry up to 20 seconds)
+Write-Status "  Getting cloudflared public URL..." -Color Yellow
+$tunnelUrl = $null
+for ($i = 0; $i -lt 20; $i++) {
     Start-Sleep -Seconds 1
+    if (Test-Path $cfLog) {
+        $content = Get-Content $cfLog -Raw -ErrorAction SilentlyContinue
+        if ($content -match "(https://[a-zA-Z0-9\-]+\.trycloudflare\.com)") {
+            $tunnelUrl = $matches[1]
+            break
+        }
+    }
+    if ($cfProcess.HasExited) {
+        Write-Status "  cloudflared process exited unexpectedly." -Color Red
+        Get-Content $cfLog -Tail 10 | ForEach-Object { Write-Host "     $_" -ForegroundColor Red }
+        break
+    }
 }
 
-if (-not $ngrokUrl) {
-    Write-Status "  [FAIL] Could not get ngrok URL." -Color Red
-    Write-Status "     Is ngrok installed? Try running 'ngrok http 3001' manually." -Color Red
-    Stop-Process -Id $ngrokProcess.Id -Force -ErrorAction SilentlyContinue
+if (-not $tunnelUrl) {
+    Write-Status "  [FAIL] Could not get cloudflared tunnel URL." -Color Red
+    Write-Status "     Is cloudflared installed? Try: winget install cloudflare.cloudflared" -Color Red
+    Write-Status "     Or run manually: cloudflared tunnel --url http://localhost:3001" -Color Red
+    Get-Content $cfLog -Tail 10 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "     $_" -ForegroundColor Red }
+    Stop-Process -Id $cfProcess.Id -Force -ErrorAction SilentlyContinue
     exit 1
 }
 
-Write-Status "  [OK] ngrok URL: $ngrokUrl" -Color Green
+Write-Status "  [OK] Tunnel URL: $tunnelUrl" -Color Green
 
 # 4. Start Speech Engine server
 Write-Status "  Starting Speech Engine server..." -Color Yellow
 $engineLog = "$LogDir\engine.log"
 $engineErrLog = "$LogDir\engine-err.log"
-$engineProcess = Start-Process -WindowStyle Hidden -FilePath "python" `
-    -ArgumentList "speech_engine_server.py", "--url", $ngrokUrl `
-    -PassThru -WorkingDirectory $ProjectDir `
-    -RedirectStandardOutput $engineLog -RedirectStandardError $engineErrLog
+$engineProcess = Start-Process -WindowStyle Hidden -FilePath $PythonBin `
+    -ArgumentList "speech_engine_server.py", "--url", $tunnelUrl `
+    -PassThru -WorkingDirectory $ProjectDir
 Save-Pid "engine" $engineProcess.Id
 
 # 5. Wait for Speech Engine to be created (checks for .engine_id file, up to 30s)
@@ -127,7 +171,7 @@ if (-not $created) {
 Write-Status "  Starting FastAPI server..." -Color Yellow
 $apiLog = "$LogDir\api.log"
 $apiErrLog = "$LogDir\api-err.log"
-$apiProcess = Start-Process -WindowStyle Hidden -FilePath "python" `
+$apiProcess = Start-Process -WindowStyle Hidden -FilePath $PythonBin `
     -ArgumentList "api.py" `
     -PassThru -WorkingDirectory $ProjectDir `
     -RedirectStandardOutput $apiLog -RedirectStandardError $apiErrLog
