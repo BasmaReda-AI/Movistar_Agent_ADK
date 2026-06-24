@@ -131,6 +131,7 @@ def trigger_oferta_alterna() -> dict:
 def transfer_to_human_agent(
     call_status: str,
     product_offered: str,
+    notes: str = "",
     argumentation_used: str = "N/A",
 ) -> dict:
     """Transfer the live call to a human Movistar advisor for contract closing.
@@ -139,25 +140,55 @@ def transfer_to_human_agent(
     (e.g. "sí", "listo", "dale", "me interesa") AND confirms they can stay
     on the line.
 
+    This function also fires the CRM logging pipeline (interaction log +
+    customer profile update), replacing the need for a separate end_call
+    in the handoff phase.
+
     Args:
         call_status: Outcome label, e.g. "Interested and Transferred".
         product_offered: Monthly price of the accepted plan, e.g. "$49.900".
+        notes: One-sentence summary of the interaction path.
         argumentation_used: Objection category handled at hook phase (from
             query_objection_matrix 'category' field), or "N/A" if no objection arose.
     """
+    timestamp = datetime.utcnow().isoformat()
+
+    # Fire CRM interaction log
+    interaction_payload = {
+        "customer_name": SYSTEM_STATE["NOMBRE_CLIENTE"],
+        "phone": SYSTEM_STATE["CELULAR_CONTACTO"],
+        "call_status": call_status,
+        "product_offered": product_offered,
+        "human_escalation_flag": True,
+        "argumentation_used": argumentation_used,
+        "notes": notes,
+        "timestamp": timestamp,
+    }
+    profile_payload = {
+        "customer_name": SYSTEM_STATE["NOMBRE_CLIENTE"],
+        "phone": SYSTEM_STATE["CELULAR_CONTACTO"],
+        "last_outcome": call_status,
+        "last_product_offered": product_offered,
+        "timestamp": timestamp,
+    }
+
     print("\n[SYSTEM] TRANSFER_TO_HUMAN_AGENT")
     print(f"  Call Status      : {call_status}")
     print(f"  Product Offered  : {product_offered}/mes")
     print(f"  Human Escalation : True")
     print(f"  Argumentation    : {argumentation_used}")
-    print(f"  Routing to       : Movistar live agent queue (Twilio)\n")
+    print(f"  Routing to       : Movistar live agent queue (Twilio)")
+    print(f"[SYSTEM] API POST -> Interaction Log Table\n{json.dumps(interaction_payload, indent=2, ensure_ascii=False)}")
+    print(f"[SYSTEM] API POST -> Customer Profile Table\n{json.dumps(profile_payload, indent=2, ensure_ascii=False)}")
+    print("[SYSTEM] Flow ends — FIN\n")
+
     return {
         "status": "transferred",
         "call_status": call_status,
         "product_offered": product_offered,
         "human_escalation_flag": True,
         "argumentation_used": argumentation_used,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": timestamp,
     }
 
 

@@ -137,16 +137,16 @@ async function startVoiceChat() {
   setVoiceMode();
 
   try {
-    // Share current text chat history with the voice LLM before connecting
-    if (state.messages.length > 0) {
-      await fetch('/api/set-voice-context', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          history: state.messages.slice(-30).map(m => ({ role: m.role, content: m.content })),
-        }),
-      });
-    }
+    // Share current text chat history with the voice LLM before connecting.
+    // Always writes (even with empty history) to overwrite any stale data
+    // from a previous session.
+    await fetch('/api/set-voice-context', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        history: state.messages.slice(-30).map(m => ({ role: m.role, content: m.content })),
+      }),
+    });
 
     const urlRes = await fetch('/api/signed-url');
     if (!urlRes.ok) throw new Error('Failed to get signed URL');

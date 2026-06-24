@@ -202,7 +202,10 @@ async def on_transcript(transcript, session):
             chunk_size = 5
             for i in range(0, total_words, chunk_size):
                 chunk = " ".join(words[i : i + chunk_size])
-                yield chunk
+                # Trailing space keeps the word at a chunk boundary from fusing
+                # with the next chunk's first word ("...how are" + "you?..." would
+                # otherwise become "areyou?").
+                yield chunk + " "
                 # Small delay to let TTS engine breathe (non-blocking)
                 await asyncio.sleep(0.05)
 
