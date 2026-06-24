@@ -57,16 +57,6 @@ ADK-Migration/
 │   └── kb/
 │       ├── offers_kb.py           # primary (40 GB) and downsell (25 GB) plan data
 │       └── objection_matrix.py    # 22-category rebuttal matrix with verbatim scripts
-└── docs/
-    ├── elevenlabs-adk-integration-design.md
-    ├── elevenlabs-adk-implementation-plan.md
-    ├── MILESTONES.md
-    ├── TASK-LIST.md
-    ├── TEST-REPORT.md
-    ├── TEST-REPORT-VOICE.md
-    └── voice-disconnect-investigation.md
-└── logs/
-    └── log-2026-06-23.md          # Change log (Cloudflare Tunnel migration, voice context fix)
 ```
 
 ## Setup
