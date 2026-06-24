@@ -2,14 +2,14 @@
 ElevenLabs Speech Engine Server — ADK Integration
 
 This server:
-  1. Creates a Speech Engine resource with your ngrok URL
+  1. Creates a Speech Engine resource with your tunnel URL
   2. Listens for voice transcripts from ElevenLabs
   3. Calls the ADK multi-agent system (via AgentAdapter) to generate responses
   4. Streams the response back as speech
 
 How to run:
-  1. ngrok http 3001              (in one terminal)
-  2. python speech_engine_server.py   (in another terminal, paste ngrok URL)
+  1. cloudflared tunnel --url http://localhost:3001   (in one terminal)
+  2. python speech_engine_server.py   (in another terminal, paste the tunnel URL)
   3. The engine_id is printed and saved to .engine_id
 """
 
@@ -23,70 +23,6 @@ import time as _time
 from dotenv import load_dotenv
 from elevenlabs import AsyncElevenLabs
 from agent_adapter import AgentAdapter
-
-# ── File logging helper (writes directly to log file, bypassing stdout issues) ──
-_ENGINE_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "engine_server.log")
-
-def _file_log(msg):
-    """Append a message directly to engine_server.log. Always works."""
-    with open(_ENGINE_LOG, "a", buffering=1) as f:
-        f.write(msg + "\n")
-        f.flush()
-
-_file_log("=== Engine server starting ===")
-
-# ── Monkey-patch SpeechEngineSession to log WebSocket messages ──
-import elevenlabs.speech_engine.session as _ses_mod
-import websockets.exceptions as _ws_exc
-
-# Patch _handle_message to log incoming message types
-_orig_handle_message = _ses_mod.SpeechEngineSession._handle_message
-
-async def _patched_handle_message(self, msg):
-    msg_type = msg.get("type", "?")
-    msg_eid = msg.get("event_id", "?")
-    _file_log(f"[WS RECV] type={msg_type} event_id={msg_eid}")
-    print(f"  [WS RECV] type={msg_type} event_id={msg_eid}", flush=True)
-    await _orig_handle_message(self, msg)
-
-_ses_mod.SpeechEngineSession._handle_message = _patched_handle_message
-
-# Patch _send to log outgoing messages
-_orig_send = _ses_mod.SpeechEngineSession._send
-
-async def _patched_send(self, msg_dict):
-    msg_type = msg_dict.get("type", "?")
-    content_preview = str(msg_dict.get("content", ""))[:50]
-    is_final = msg_dict.get("is_final", "?")
-    _file_log(f"[WS SEND] type={msg_type} is_final={is_final} content=\"{content_preview}\"")
-    print(f"  [WS SEND] type={msg_type} is_final={is_final} content=\"{content_preview}\"", flush=True)
-    await _orig_send(self, msg_dict)
-
-_ses_mod.SpeechEngineSession._send = _patched_send
-
-# Patch the actual recv on the websocket connection to log close codes
-# We monkey-patch the wrap function that creates WebSocketLike objects
-_orig_wrap = _ses_mod.wrap_websocket
-
-def _patched_wrap(ws):
-    """Wrap a WebSocket and intercept recv errors."""
-    orig_recv = ws.recv
-
-    async def _patched_recv():
-        try:
-            return await orig_recv()
-        except _ws_exc.ConnectionClosed as e:
-            _file_log(f"[!!] WS recv ConnectionClosed: code={e.code} reason=\"{e.reason}\"")
-            print(f"  [!!] WS recv ConnectionClosed: code={e.code} reason=\"{e.reason}\"", flush=True)
-            raise
-        except Exception as e:
-            print(f"  [!!] WS recv error: {type(e).__name__}: {e}", flush=True)
-            raise
-
-    ws.recv = _patched_recv
-    return _orig_wrap(ws)
-
-_ses_mod.wrap_websocket = _patched_wrap
 
 # Load API keys from .env
 load_dotenv()
@@ -102,6 +38,11 @@ TRANSCRIPT_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "voice_transcript.json"
 )
 
+# Voice context file (bridged from text chat by api.py)
+VOICE_CONTEXT_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "voice_context.json"
+)
+
 # Singleton AgentAdapter (reused across voice sessions)
 adapter = AgentAdapter()
 
@@ -110,21 +51,24 @@ adapter = AgentAdapter()
 
 
 def _load_voice_context():
-    """Load prior text chat history from voice_context.json (if any).
+    """Load prior text chat history from voice_context.json (once) then delete it.
 
     This file is written by api.py's POST /api/set-voice-context endpoint
     when the frontend starts a voice session, bridging text→voice continuity.
+    The file is removed after reading so it only affects the first voice turn
+    and stale data never leaks across sessions.
     """
-    context_file = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "voice_context.json"
-    )
-    if os.path.exists(context_file):
+    if os.path.exists(VOICE_CONTEXT_FILE):
         try:
-            with open(context_file, "r") as f:
+            with open(VOICE_CONTEXT_FILE, "r") as f:
                 data = json.load(f)
-                return data.get("messages", [])
-        except Exception:
-            pass
+            messages = data.get("messages", [])
+            # Remove the file — context is loaded once, never again
+            os.remove(VOICE_CONTEXT_FILE)
+            print(f"  [voice-context] Loaded {len(messages)} context messages, file deleted")
+            return messages
+        except Exception as e:
+            print(f"  [!] Error loading voice context: {e}")
     return []
 
 
@@ -132,14 +76,11 @@ def _load_voice_context():
 
 
 async def on_init(conversation_id, session):
-    """Called when a new conversation session starts.
-    
-    With WebRTC, the first message is sent from the client (frontend)
-    via the startSession() `firstMessage` override, so we don't send
-    anything here. We just log and wait for the user's first utterance.
-    """
-    _file_log(f"[+] on_init called! conversation_id={conversation_id}")
     print(f"\n[+] Session started: {conversation_id}")
+
+    # Reset the ADK agent session so it has no memory of prior calls
+    adapter.reset_session(session_id="voice")
+    print(f"  [on_init] ADK session reset")
 
 
 async def on_transcript(transcript, session):
@@ -166,12 +107,10 @@ async def on_transcript(transcript, session):
 
     # The last message should be the user's current utterance
     if not messages:
-        _file_log("[!!] Empty transcript")
         print("  [!!] Empty transcript — nothing to respond to.")
         return
 
     user_message = messages[-1]["content"]
-    _file_log(f"[on_transcript] User: {user_message[:80]}...")
     print(f"  [User] {user_message[:80]}...")
     print(f"  [LLM] Calling ADK agent...")
 
@@ -181,36 +120,32 @@ async def on_transcript(transcript, session):
         response_text = await adapter.chat(user_message, session_id="voice")
 
         if not response_text:
-            _file_log("[!] Agent returned empty response")
             print("  [!] Agent returned empty response, sending fallback.")
             response_text = (
                 "I'm sorry, I didn't quite catch that. Could you please repeat?"
             )
 
-        _file_log(f"[on_transcript] Agent response: {response_text[:100]}...")
         print(f"  [Agent] {response_text[:100]}...")
 
         # Chunk the response into words so ElevenLabs TTS can start
         # speaking immediately instead of waiting for the full text.
         words = response_text.split()
         total_words = len(words)
-        _file_log(f"[on_transcript] Streaming {total_words} words...")
         print(f"  [+] Streaming {total_words} words to ElevenLabs...")
 
         async def generate():
-            # Yield words in small groups (4-6 words per chunk) for smooth TTS
+            # Yield words in small groups (4-6 words per chunk) for smooth TTS.
+            # Each chunk ends with a trailing space so that when the chunks are
+            # concatenated downstream the word at a chunk boundary stays
+            # separated (otherwise "...how are" + "you?..." fuses to "areyou?").
             chunk_size = 5
             for i in range(0, total_words, chunk_size):
                 chunk = " ".join(words[i : i + chunk_size])
-                # Trailing space keeps the word at a chunk boundary from fusing
-                # with the next chunk's first word ("...how are" + "you?..." would
-                # otherwise become "areyou?").
                 yield chunk + " "
                 # Small delay to let TTS engine breathe (non-blocking)
                 await asyncio.sleep(0.05)
 
         await session.send_response(generate())
-        _file_log("[on_transcript] Response streamed to ElevenLabs")
         print(f"  [+] Response streamed to ElevenLabs")
 
         # Save transcript to shared file (optional, for debugging)
@@ -233,51 +168,46 @@ async def on_transcript(transcript, session):
 
 def on_close(session):
     """Called when the conversation ends cleanly."""
-    _file_log(f"[*] on_close: {session.conversation_id}")
     print(f"  [*] Session ended: {session.conversation_id}")
 
 
 def on_disconnect(session):
     """Called when the WebSocket drops unexpectedly."""
-    _file_log(f"[!] on_disconnect: {session.conversation_id}")
     print(f"  [!] Session disconnected: {session.conversation_id}")
 
 
 def on_error(err, session):
     """Called on protocol or WebSocket errors."""
-    _file_log(f"[!] on_error: {err}")
     print(f"  [!] Error: {err}")
 
 
 # ── Main ───────────────────────────────────────────────────────────
 
 
-async def main(ngrok_url=None):
+async def main(tunnel_url=None):
     elevenlabs = AsyncElevenLabs(api_key=ELEVENLABS_API_KEY)
 
     # Clear previous transcript file
     if os.path.exists(TRANSCRIPT_FILE):
         os.remove(TRANSCRIPT_FILE)
 
-    # 1. Get the ngrok URL (from argument or prompt)
-    if not ngrok_url:
+    # 1. Get the tunnel URL (from argument or prompt)
+    if not tunnel_url:
         print("\n" + "=" * 60)
         print("  ElevenLabs Speech Engine Server (ADK Integration)")
         print("=" * 60)
-        print("\nMake sure ngrok is running in another terminal:")
-        print("  ngrok http 3001")
+        print("\nMake sure cloudflared is running in another terminal:")
+        print("  cloudflared tunnel --url http://localhost:3001")
         print()
-        ngrok_url = input("  Paste your ngrok HTTPS URL: ").strip()
+        tunnel_url = input("  Paste your tunnel HTTPS URL: ").strip()
 
     # Convert https:// → wss:// and append /ws
-    ws_url = ngrok_url.replace("https://", "wss://").replace("http://", "wss://")
+    ws_url = tunnel_url.replace("https://", "wss://").replace("http://", "wss://")
     if not ws_url.endswith("/ws"):
         ws_url = ws_url.rstrip("/") + "/ws"
-    _file_log(f"[main] WebSocket URL: {ws_url}")
     print(f"\n  [*] WebSocket URL: {ws_url}")
 
     # 2. Create a Speech Engine resource
-    _file_log("[main] Creating Speech Engine resource...")
     print(f"\n  [*] Creating Speech Engine resource...")
     try:
         engine = await elevenlabs.speech_engine.create(
@@ -286,7 +216,6 @@ async def main(ngrok_url=None):
             overrides={"first_message": True},
         )
         engine_id = engine.engine_id
-        _file_log(f"[main] Engine created: {engine_id}")
         print(f"  [+] Speech Engine created! ID: {engine_id}")
 
         # Save engine ID for the API server to use
@@ -298,20 +227,18 @@ async def main(ngrok_url=None):
     except Exception as e:
         print(f"  [!] Failed to create Speech Engine: {e}")
         print("\n  Possible issues:")
-        print("    - Is ngrok running and pointing to port 3001?")
-        print("    - Is the URL correct? (should look like https://xxx.ngrok-free.app)")
+        print("    - Is cloudflared running and pointing to port 3001?")
+        print("    - Is the URL correct? (should look like https://xxx.trycloudflare.com)")
         print("    - Is your ElevenLabs API key valid?")
         sys.exit(1)
 
     # 3. Start the server
-    _file_log("[main] Starting server on port 3001 with overrides.first_message=True")
     print(f"\n  [*] Starting Speech Engine server on port 3001...")
     print(f"  Press Ctrl+C to stop\n")
 
     await engine.serve(
         port=3001,
         path="/ws",
-        debug=True,
         on_init=on_init,
         on_transcript=on_transcript,
         on_close=on_close,
@@ -325,11 +252,11 @@ if __name__ == "__main__":
         description="ElevenLabs Speech Engine Server (ADK Integration)"
     )
     parser.add_argument(
-        "--url", help="ngrok HTTPS URL (e.g., https://xxx.ngrok-free.app)"
+        "--url", help="Tunnel HTTPS URL (e.g., https://xxx.trycloudflare.com)"
     )
     args = parser.parse_args()
 
     try:
-        asyncio.run(main(ngrok_url=args.url))
+        asyncio.run(main(tunnel_url=args.url))
     except KeyboardInterrupt:
         print("\n\n[*] Server stopped. See you next time!")

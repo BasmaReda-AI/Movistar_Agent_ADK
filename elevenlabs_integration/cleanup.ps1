@@ -43,11 +43,11 @@ Remove-Item "$ProjectDir\.engine_id" -Force -ErrorAction SilentlyContinue
 Remove-Item "$ProjectDir\voice_context.json" -Force -ErrorAction SilentlyContinue
 Remove-Item "$ProjectDir\voice_transcript.json" -Force -ErrorAction SilentlyContinue
 
-# Final check: kill any orphaned ngrok processes
-$orphanNgrok = Get-Process -Name "ngrok" -ErrorAction SilentlyContinue
-if ($orphanNgrok) {
-    $orphanNgrok | Stop-Process -Force
-    Write-Host "  [OK] Stopped orphaned ngrok process" -ForegroundColor Green
+# Final check: kill any orphaned cloudflared processes
+$orphanCf = Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue
+if ($orphanCf) {
+    $orphanCf | Stop-Process -Force
+    Write-Host "  [OK] Stopped orphaned cloudflared process" -ForegroundColor Green
     $stoppedSomething = $true
 }
 
