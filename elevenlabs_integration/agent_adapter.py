@@ -123,12 +123,25 @@ class AgentAdapter:
     # ── Internals ───────────────────────────────────────────────────
 
     def _create_session_if_not_exists(self, session_id: str):
-        """Create a session if it doesn't already exist (swallow duplicates)."""
+        """Create a session only if it doesn't already exist.
+
+        ADK's ``InMemorySessionService.create_session`` does NOT no-op on a
+        duplicate id — it overwrites the existing session with a fresh, empty
+        one, wiping all prior events. So we must check for existence first;
+        otherwise every ``chat()`` call would erase the conversation history
+        and the agent would restart from its opening greeting each turn.
+        """
         try:
-            self._session_service.create_session(
+            existing = self._session_service.get_session(
                 app_name="movistar_agent",
                 user_id="user",
                 session_id=session_id,
             )
-        except Exception:
-            pass  # Session already exists — that's fine
+            if existing is None:
+                self._session_service.create_session(
+                    app_name="movistar_agent",
+                    user_id="user",
+                    session_id=session_id,
+                )
+        except Exception as e:
+            print(f"[AgentAdapter] Error ensuring session {session_id}: {e}")
